@@ -107,4 +107,4 @@ For the URL, enter the endpoint specified in the "endpoints" key when running
 Click the "Save & Test" button. You should see a message stating that the
 data source is working
 
-[1] https://labs.consol.de/development/2018/01/19/openshift_application_monitoring.html
+[1]: https://labs.consol.de/development/2018/01/19/openshift_application_monitoring.html
