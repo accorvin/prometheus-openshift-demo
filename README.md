@@ -3,10 +3,10 @@
 A demo of Prometheus running on openshift monitoring an application running
 in the same openshift cluster
 
-Credit to [1](this blog post) for the source of much of this. I've adapted their source code
-and examples to be more suited to my use case. The main adjustment is moving
-the prometheus and prometheus alerts configurations to files for easier
-maintenance in git.
+Credit to [this blog post][1] for the source of much of this. I've adapted their
+source code and examples to be more suited to my use case. The main adjustment
+is moving the prometheus and prometheus alerts configurations to files for
+easier maintenance in git.
 
 # Setup
 
@@ -62,7 +62,7 @@ oc get route prometheus -n prometheus
 ## Deploying grafana
 
 I like to use Grafana to view metrics from prometheus. These steps were taken
-directly from [1](this blog post) and repeated here for easy referencing.
+directly from [this blog post][1] and repeated here for easy referencing.
 
 Create a new project for grafana
 
