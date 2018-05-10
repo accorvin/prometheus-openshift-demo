@@ -25,26 +25,39 @@ the commands should be adjusted accordingly.
 
 ## Deploying prometheus
 
-* Create an openshift project for the prometheus deployment
+Create an openshift project for the prometheus deployment
 
-```oc new-project prometheus```
+```
+oc new-project prometheus
+```
 
-* Create a secret for the prometheus config and rules file
+Create a secret for the prometheus config and rules file
 
-```oc create secret generic prometheus --from-file=prometheus.yml \
---from-file=alertmanager.yml -n prometheus```
+```
+oc create secret generic prometheus --from-file=prometheus.yml \
+--from-file=alertmanager.yml -n prometheus
+```
 
-* Create a secret for the prometheus alertmanager config
-  ```oc create secret generic prometheus-alerts --from-file=alertmanager.yml \
--n prometheus```
+Create a secret for the prometheus alertmanager config
 
-* Deploy the prometheus stack to openshift using the openshift definition file
-  ```oc process -f prometheus-openshift-template.yml -p NAMESPACE=prometheus | \
-oc apply -f -```
+```
+oc create secret generic prometheus-alerts --from-file=alertmanager.yml \
+-n prometheus
+```
 
-* Once the pod deploys successfully, you should be able to view the prometheus
-  web interface using the URL found by running
-  ```oc get route prometheus -n prometheus```
+Deploy the prometheus stack to openshift using the openshift definition file
+
+```
+oc process -f prometheus-openshift-template.yml -p NAMESPACE=prometheus | \
+oc apply -f -
+```
+
+Once the pod deploys successfully, you should be able to view the prometheus
+web interface using the URL found by running
+
+```
+oc get route prometheus -n prometheus
+```
 
 ## Deploying grafana
 
