@@ -64,35 +64,47 @@ oc get route prometheus -n prometheus
 I like to use Grafana to view metrics from prometheus. These steps were taken
 directly from [1] and repeated here for easy referencing.
 
-* Create a new project for grafana
-  ```oc new-project grafana```
+Create a new project for grafana
 
-* Deploy the grafana app
-  ```oc new-app -f https://raw.githubusercontent.com/ConSol/\
+```
+oc new-project grafana
+```
+
+Deploy the grafana app
+
+```
+oc new-app -f https://raw.githubusercontent.com/ConSol/\
 springboot-monitoring-example/master/templates/grafana.yaml \
--p NAMESPACE=grafana```
+-p NAMESPACE=grafana
+```
 
-* Add the ```view``` role to the grafana service account on the prometheus
-  project
-  ```oc policy add-role-to-user view system:serviceaccount:grafana:grafana-ocp \
--n prometheus```
+Add the ```view``` role to the grafana service account on the prometheus
+project
+
+```
+oc policy add-role-to-user view system:serviceaccount:grafana:grafana-ocp \
+-n prometheus
+```
 
 ## Configure grafana to access prometheus as a data source
 
-* Navigate to the grafana service URL found using
-  ```oc get route grafana-ocp -n grafana```
+Navigate to the grafana service URL found using
 
-* Click the "Add data source" button
+```
+oc get route grafana-ocp -n grafana
+```
 
-* Enter a name for the data source, for example: Prometheus-OCP
+Click the "Add data source" button
 
-* For the data source type, select Prometheus
+Enter a name for the data source, for example: Prometheus-OCP
 
-* For the URL, enter the endpoint specified in the "endpoints" key when running
-  ```oc describe service prometheus -n prometheus```. Note that you will have to
-  prepend the endpoint with "http://"
+For the data source type, select Prometheus
 
-* Click the "Save & Test" button. You should see a message stating that the
-  data source is working
+For the URL, enter the endpoint specified in the "endpoints" key when running
+```oc describe service prometheus -n prometheus```. Note that you will have to
+ prepend the endpoint with "http://"
+
+Click the "Save & Test" button. You should see a message stating that the
+data source is working
 
 [1] https://labs.consol.de/development/2018/01/19/openshift_application_monitoring.html
