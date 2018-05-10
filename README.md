@@ -107,4 +107,22 @@ For the URL, enter the endpoint specified in the "endpoints" key when running
 Click the "Save & Test" button. You should see a message stating that the
 data source is working
 
+## Deploy the demo application
+
+This repo contains a sample Flask application for generating metrics in
+prometheus. Perform the following to set up this application.
+
+Create a new project for the demo application:
+
+```
+oc new-project demoapplication
+```
+
+Create the image steam for the demo application
+
+```
+oc process -f demoapplication/demoapplication-openshift-template.yml | \
+oc apply -n demoapplication -f -
+```
+
 [1]: https://labs.consol.de/development/2018/01/19/openshift_application_monitoring.html
