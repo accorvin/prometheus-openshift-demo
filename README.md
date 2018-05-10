@@ -26,9 +26,11 @@ the commands should be adjusted accordingly.
 ## Deploying prometheus
 
 * Create an openshift project for the prometheus deployment
+
   ```oc new-project prometheus```
 
 * Create a secret for the prometheus config and rules file
+
   ```oc create secret generic prometheus --from-file=prometheus.yml \
 --from-file=alertmanager.yml -n prometheus```
 
