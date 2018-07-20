@@ -84,7 +84,13 @@ You should see that the ```requests_count``` counter increments every time
 you access the home page. (Note that there is a delay due to the frequency
 at which the prometheus server queries for metrics).
 
-## How Prometheus knows to pull metrics for the demoapplication
+# Viewing metrics in prometheus
+
+In the prometheus UI, you should be able to view the results for the
+"requests_count" metric simply by typing that metric into the query
+field on the prometheus home page and clicking Execute.
+
+# How Prometheus knows to pull metrics for the demoapplication
 
 The important part here is that the demoapplication service in OpenShift
 has the annotation ```prometheus.io/scrape: "true"``` defined in its
@@ -93,7 +99,7 @@ server is configured to look for this annotation. At line 191 in
 prometheus.yaml we tell the prometheus to query any services with this
 endpoint for metrics using the /metrics/ URL.
 
-## Some notes on the Flask changes
+# Some notes on the Flask changes
 
 The following are the important bits for how the Flask demoapp was set up to
 provide metrics:
