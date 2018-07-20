@@ -23,6 +23,11 @@ openshift v3.9.0+0e3d24c-14
 kubernetes v1.9.1+a0ce1bc657
 ```
 
+Note that I had to provision minishift with more than default RAM using the
+following command:
+
+```minishift start --memory 4GB```
+
 Perform the following to set up the demo environment. These instructions
 assume you are familiar with the ```oc``` command and that you have already
 logged into an openshift instance using the ```oc login``` command.
