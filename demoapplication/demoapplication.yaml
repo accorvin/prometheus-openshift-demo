@@ -92,7 +92,7 @@ objects:
             kind: ImageStreamTag
             name: prometheus-demoapp:latest
       - type: ConfigChange
-    replicas: 2
+    replicas: 1
     template:
       metadata:
         labels:
