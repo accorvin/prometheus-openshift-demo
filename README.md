@@ -1,113 +1,54 @@
 # prometheus-openshift-demo
 
-A demo of Prometheus running on openshift monitoring an application running
-in the same openshift cluster
+A demo of Prometheus running on openshift monitoring a Flask application
+running on the same openshift cluster
 
-Credit to [this blog post][1] for the source of much of this. I've adapted their
-source code and examples to be more suited to my use case. The main adjustment
-is moving the prometheus and prometheus alerts configurations to files for
-easier maintenance in git.
+# OpenShift Environment
 
-# Setup
+You should be able to perform the following steps from a clean minishift
+environment. The following show the openshift versions that I have tested
+this with:
+
+```
+Alexs-MBP:prometheus-openshift-demo acorvin$ minishift version
+minishift v1.17.0+f974f0c
+
+Alexs-MBP:prometheus-openshift-demo acorvin$ oc version
+oc v3.9.0+191fece
+kubernetes v1.9.1+a0ce1bc657
+features: Basic-Auth
+
+Server https://192.168.64.3:8443
+openshift v3.9.0+0e3d24c-14
+kubernetes v1.9.1+a0ce1bc657
+```
 
 Perform the following to set up the demo environment. These instructions
 assume you are familiar with the ```oc``` command and that you have already
 logged into an openshift instance using the ```oc login``` command.
 
-Note also that in the below commands there are several instances of:
-```-n prometheus```
-or
-```-p NAMESPACE=prometheus```
-
-Here, "prometheus" refers to the name of the project created in the initial
-```oc new-project prometheus``` command. If a different project name is used,
-the commands should be adjusted accordingly.
-
-## Deploying prometheus
+# Deploy Prometheus
 
 Create an openshift project for the prometheus deployment
 
 ```
-oc new-project prometheus
+oc new-project prometheus --display-name="Prometheus Server"
 ```
 
-Create a secret for the prometheus config and rules file
+Deploy the prometheus stack to openshift using the openshift template file
 
 ```
-oc create secret generic prometheus --from-file=prometheus.yml \
---from-file=alertmanager.yml -n prometheus
-```
-
-Create a secret for the prometheus alertmanager config
-
-```
-oc create secret generic prometheus-alerts --from-file=alertmanager.yml \
--n prometheus
-```
-
-Deploy the prometheus stack to openshift using the openshift definition file
-
-```
-oc process -f prometheus-openshift-template.yml -p NAMESPACE=prometheus | \
-oc apply -f -
+oc process -f prometheus.yaml | oc apply -f -
 ```
 
 Once the pod deploys successfully, you should be able to view the prometheus
 web interface using the URL found by running
 
 ```
-oc get route prometheus -n prometheus
+oc get route prometheus
 ```
 
-## Deploying grafana
-
-I like to use Grafana to view metrics from prometheus. These steps were taken
-directly from [this blog post][1] and repeated here for easy referencing.
-
-Create a new project for grafana
-
-```
-oc new-project grafana
-```
-
-Deploy the grafana app
-
-```
-oc new-app -f https://raw.githubusercontent.com/ConSol/\
-springboot-monitoring-example/master/templates/grafana.yaml \
--p NAMESPACE=grafana
-```
-
-Add the ```view``` role to the grafana service account on the prometheus
-project
-
-```
-oc policy add-role-to-user view system:serviceaccount:grafana:grafana-ocp \
--n prometheus
-```
-
-## Configure grafana to access prometheus as a data source
-
-Navigate to the grafana service URL found using
-
-```
-oc get route grafana-ocp -n grafana
-```
-
-Click the "Add data source" button
-
-Enter a name for the data source, for example: Prometheus-OCP
-
-For the data source type, select Prometheus
-
-For the URL, enter the endpoint specified in the "endpoints" key when running
-```oc describe service prometheus -n prometheus```. Note that you will have to
- prepend the endpoint with "http://"
-
-Click the "Save & Test" button. You should see a message stating that the
-data source is working
-
-## Deploy the demo application
+# Deploy the demo application
 
 This repo contains a sample Flask application for generating metrics in
 prometheus. Perform the following to set up this application.
@@ -118,11 +59,57 @@ Create a new project for the demo application:
 oc new-project demoapplication
 ```
 
-Create the image steam for the demo application
+Deploy the demo application using the openshift template:
 
 ```
-oc process -f demoapplication/demoapplication-openshift-template.yml | \
-oc apply -n demoapplication -f -
+oc process -f demoapplication/demoapplication.yaml | oc apply -f -
 ```
 
-[1]: https://labs.consol.de/development/2018/01/19/openshift_application_monitoring.html
+You should now be able to access the demo application using the URL returned
+by:
+
+```
+oc get route demoapplication
+```
+
+When you access the index/home page of the demo application, you should
+see the words "Hello, world!". When you access the ```/metrics/``` page
+of the demo application you'll see some prometheus metrics printed out.
+You should see that the ```requests_count``` counter increments every time
+you access the home page. (Note that there is a delay due to the frequency
+at which the prometheus server queries for metrics).
+
+## How Prometheus knows to pull metrics for the demoapplication
+
+The important part here is that the demoapplication service in OpenShift
+has the annotation ```prometheus.io/scrape: "true"``` defined in its
+metadata (Line 50 in demoapplication/demoapplication.yaml). The Prometheus
+server is configured to look for this annotation. At line 191 in
+prometheus.yaml we tell the prometheus to query any services with this
+endpoint for metrics using the /metrics/ URL.
+
+## Some notes on the Flask changes
+
+The following are the important bits for how the Flask demoapp was set up to
+provide metrics:
+
+  * Make sure the prometheus_client python package is installed
+
+  * Add the import ```from prometheus_client import generate_latest, Counter```
+    to your Flask app. Note that the demoapplication is a very simple app
+    with not very realistic structure (it's just one python file). I'm not
+    sure yet how to structure the imports in a more production-ready app.
+
+  * Initialize a counter:
+    ```requests_count = Counter('requests_count', 'The number of requests')```
+    Note that there are other metric types supported by Prometheus, a counter
+    is just the simple example I chose to start with. Support metrics are
+    described [here][1].
+
+  * Add a call to increment the counter somewhere by adding
+    ```requests_count.inc()```
+
+  * Add a ```/metrics/``` route to the flask app that returns
+    ```Response(generate_latest())```
+
+[1]: https://github.com/prometheus/client_python
