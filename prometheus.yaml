@@ -1,0 +1,312 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: prometheus
+  annotations:
+    "openshift.io/display-name": Prometheus
+    description: |
+      A monitoring solution for an OpenShift cluster - collect and gather metrics from nodes, services, and the infrastructure.
+    iconClass: icon-cogs
+    tags: "monitoring,prometheus,time-series"
+parameters:
+- description: The namespace to instantiate prometheus under. Defaults to 'prometheus'.
+  name: NAMESPACE
+  value: prometheus
+- description: The location of the prometheus image
+  name: IMAGE_PROMETHEUS
+  value: wkulhanek/prometheus:latest
+- description: The scheme to communicate with the Alertmanager. Defaults to 'http'.
+  name: ALERT_MANAGER_SCHEME
+  value: http
+- description: Alertmanager Hostname and Port. Defaults to 'alertmanager:9093'.
+  name: ALERT_MANAGER_HOST_PORT
+  value: alertmanager:9093
+
+objects:
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: prometheus
+
+- apiVersion: v1
+  kind: RoleBinding
+  metadata:
+    name: prometheus-viewer
+  roleRef:
+    name: view
+  subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: ${NAMESPACE}
+
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: prometheus
+  spec:
+    to:
+      name: prometheus
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/scheme: http
+    labels:
+      name: prometheus
+    name: prometheus
+  spec:
+    ports:
+    - name: prometheus
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+    selector:
+      app: prometheus
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: prometheus
+    labels:
+      app: prometheus
+  spec:
+    replicas: 1
+    selector:
+      app: prometheus
+      deploymentconfig: prometheus
+    template:
+      metadata:
+        labels:
+          app: prometheus
+          deploymentconfig: prometheus
+        name: prometheus
+      spec:
+        serviceAccountName: prometheus
+        containers:
+        - name: prometheus
+          args:
+          - --config.file=/etc/prometheus/prometheus.yml
+          - --web.listen-address=:9090
+          - --storage.tsdb.retention=6h
+          - --storage.tsdb.min-block-duration=15m
+          - --storage.tsdb.max-block-duration=60m
+          image: ${IMAGE_PROMETHEUS}
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /status
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /status
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          # Set Requests & Limits
+          # Prometheus uses 2Gi memory by default with 50% headroom
+          # required.
+          resources:
+            requests:
+              cpu: 500m
+              memory: 3Gi
+            limits:
+              cpu: 500m
+              memory: 3Gi
+          volumeMounts:
+          - mountPath: /etc/prometheus
+            name: config-volume
+          - mountPath: /prometheus
+            name: data-volume
+          - mountPath: /etc/prometheus-rules
+            name: rules-volume
+        restartPolicy: Always
+        volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: data-volume
+        - name: config-volume
+          configMap:
+            defaultMode: 420
+            name: prometheus
+        - name: rules-volume
+          configMap:
+            defaultMode: 420
+            name: prometheus-rules
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: prometheus
+  data:
+    prometheus.yml: |
+      global:
+        scrape_interval: 1m
+        scrape_timeout: 10s
+        evaluation_interval: 1m
+      alerting:
+        alertmanagers:
+          - scheme: ${ALERT_MANAGER_SCHEME}
+            static_configs:
+            - targets:
+              - "${ALERT_MANAGER_HOST_PORT}"
+
+      rule_files:
+      - /etc/prometheus-rules/*.rules
+
+      # A scrape configuration for running Prometheus on a Kubernetes cluster.
+      # This uses separate scrape configs for cluster components (i.e. API server, node)
+      # and services to allow each to use different authentication configs.
+      #
+      # Kubernetes labels will be added as Prometheus labels on metrics via the
+      # `labelmap` relabeling action.
+
+      scrape_configs:
+        # Scrape config for service endpoints.
+        #
+        # The relabeling allows the actual service scrape endpoint to be configured
+        # via the following annotations:
+        #
+        # * `prometheus.io/scrape`: Only scrape services that have a value of `true`
+        # * `prometheus.io/scheme`: If the metrics endpoint is secured then you will need
+        # to set this to `https` & most likely set the `tls_config` of the scrape config.
+        # * `prometheus.io/path`: If the metrics path is not `/metrics` override this.
+        # * `prometheus.io/port`: If the metrics are exposed on a different port to the
+        # service then set this appropriately.
+      - job_name: kubernetes-service-endpoints
+        scrape_interval: 1m
+        scrape_timeout: 10s
+        metrics_path: /metrics
+        scheme: http
+        kubernetes_sd_configs:
+        - api_server: null
+          role: endpoints
+          namespaces:
+            names: []
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+          separator: ;
+          regex: "true"
+          replacement: $1
+          action: keep
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+          separator: ;
+          regex: (https?)
+          target_label: __scheme__
+          replacement: $1
+          action: replace
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+          separator: ;
+          regex: (.+)
+          target_label: __metrics_path__
+          replacement: $1
+          action: replace
+        - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+          separator: ;
+          regex: (.+)(?::\d+);(\d+)
+          target_label: __address__
+          replacement: $1:$2
+          action: replace
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_username]
+          separator: ;
+          regex: (.+)
+          target_label: __basic_auth_username__
+          replacement: $1
+          action: replace
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_password]
+          separator: ;
+          regex: (.+)
+          target_label: __metrics_path__
+          replacement: $1
+          action: replace
+        - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+          separator: ;
+          regex: (.+)(?::\d+);(\d+)
+          target_label: __address__
+          replacement: $1:$2
+          action: replace
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_username]
+          separator: ;
+          regex: (.+)
+          target_label: __basic_auth_username__
+          replacement: $1
+          action: replace
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_password]
+          separator: ;
+          regex: (.+)
+          target_label: __basic_auth_password__
+          replacement: $1
+          action: replace
+        - separator: ;
+          regex: __meta_kubernetes_service_label_(.+)
+          replacement: $1
+          action: labelmap
+        - source_labels: [__meta_kubernetes_namespace]
+          separator: ;
+          regex: (.*)
+          target_label: kubernetes_namespace
+          replacement: $1
+          action: replace
+        - source_labels: [__meta_kubernetes_service_name]
+          separator: ;
+          regex: (.*)
+          target_label: kubernetes_name
+          replacement: $1
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: prometheus-rules
+  data:
+    alerting.rules: |
+      groups:
+      - name: example-rules
+        interval: 30s # defaults to global interval
+        rules:
+        - alert: Node Down
+          expr: up{job="kubernetes-nodes"} == 0
+          annotations:
+            miqTarget: "ContainerNode"
+            severity: "HIGH"
+            message: "{{$labels.instance}} is down"
+
+    recording.rules: |
+      groups:
+      - name: aggregate_container_resources
+        rules:
+        - record: container_cpu_usage_rate
+          expr: sum without (cpu) (rate(container_cpu_usage_seconds_total[5m]))
+        - record: container_memory_rss_by_type
+          expr: container_memory_rss{id=~"/|/system.slice|/kubepods.slice"} > 0
+        - record: container_cpu_usage_percent_by_host
+          expr: sum by (kubernetes_io_hostname,type)(rate(container_cpu_usage_seconds_total{id="/"}[5m])) / on (kubernetes_io_hostname,type) machine_cpu_cores
+        - record: apiserver_request_count_rate_by_resources
+          expr: sum without (client,instance,contentType) (rate(apiserver_request_count[5m]))
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: data-volume
+    labels:
+      app: prometheus
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: "1Gi"
