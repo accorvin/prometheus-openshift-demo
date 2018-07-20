@@ -46,11 +46,14 @@ objects:
   kind: Service
   metadata:
     name: prometheus-demoapp-service
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/scheme: http
   spec:
     ports:
       - name: web
         protocol: TCP
-        port: 443
+        port: 80
         targetPort: 5000
     selector:
       name: prometheus-demoapp
@@ -66,8 +69,6 @@ objects:
     to:
       kind: Service
       name: prometheus-demoapp-service
-    tls:
-      termination: edge
   status: {}
 
 - apiVersion: v1
